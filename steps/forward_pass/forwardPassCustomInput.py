@@ -40,29 +40,42 @@ from robust_deid.deid import TextDeid
 
 
 # Initialize the path where the dataset is located (input_file).
-# Input dataset
+# Arg Inputs
+## Input data
 input_file_csv = sys.argv[1] # '/prj0124_gpu/akr4007/data/currently_relevant_data/full_csv_most_relevant_decoded_encoded_512_token_length_notes_per_person.csv'
-input_file = os.path.join(os.path.dirname(input_file_csv), os.path.splitext(os.path.basename(input_file_csv))[0] + "_ehr_input_file_SAFE_TO_DELETE.jsonl") # path of the .jsonl file created from the .csv file, specifically to be used by this file
+## Path to confif gile
+model_config_json_path = sys.argv[2] # ./run/i2b2/predict_i2b2_with_threshold_max.json, ./run/i2b2/predict_i2b2.jsonn
+## Are we debugging? If yes, we quicken the program by taking just one row of input data, and other possible optimizations
+debug_mode = True if sys.argv[3] == "True" else False # command line arguments will be taken as input in string form.
+## Must provide custom threshold if threshold_max process is used
+threshold_input_bool = False
+if 'threshold_max' in model_config_json_path:
+    threshold_input_bool = True
+    threshold_input =  float(sys.argv[4])
+
+input_file = os.path.join(os.path.dirname(input_file_csv), "ehr_data", os.path.splitext(os.path.basename(input_file_csv))[0] + "_ehr_input_file_SAFE_TO_DELETE.jsonl") # path of the .jsonl file created from the .csv file, specifically to be used by this file
 max_number_of_tokens_per_text = 512
 # Initialize the location where we will store the sentencized and tokenized dataset (ner_dataset_file)
-ner_dataset_file = os.path.join(os.path.dirname(input_file_csv), os.path.splitext(os.path.basename(input_file_csv))[0] + "_ehr_ner_dataset_SAFE_TO_DELETE.jsonl")# '../../data/ner_datasets/test.jsonl'
+ner_dataset_file = os.path.join(os.path.dirname(input_file_csv), "ehr_data", os.path.splitext(os.path.basename(input_file_csv))[0] + "_ehr_ner_dataset_SAFE_TO_DELETE.jsonl")# '../../data/ner_datasets/test.jsonl'
 # Initialize the location where we will store the model predictions (predictions_file)
 # Verify this file location - Ensure it's the same location that you will pass in the json file
 # to the sequence tagger model. i.e. output_predictions_file in the json file should have the same
 # value as below
-predictions_file = os.path.join(os.path.dirname(input_file_csv), os.path.splitext(os.path.basename(input_file_csv))[0] + "_ehr_predictions_SAFE_TO_DELETE.jsonl")
+predictions_file = os.path.join(os.path.dirname(input_file_csv), "ehr_data", os.path.splitext(os.path.basename(input_file_csv))[0] + "_ehr_predictions_SAFE_TO_DELETE.jsonl")
 # Initialize the file that will contain the original note text and the de-identified note text
 # deid_file = '../../data/notes/deid.jsonl'
-deid_file_csv = os.path.join(os.path.dirname(input_file_csv), os.path.splitext(os.path.basename(input_file_csv))[0] + "_ehr_masked.csv")
-deid_file_parquet = os.path.join(os.path.dirname(input_file_csv), os.path.splitext(os.path.basename(input_file_csv))[0] + "_ehr_masked.parquet")
+deid_file_csv = os.path.join(os.path.dirname(input_file_csv), "ehr_data", os.path.splitext(os.path.basename(input_file_csv))[0] + ("_ehr_masked.csv" if not threshold_input_bool else f"_threshold_{threshold_input}_ehr_masked.csv"))
+deid_file_parquet = os.path.join(os.path.dirname(input_file_csv), "ehr_data", os.path.splitext(os.path.basename(input_file_csv))[0] + ("_ehr_masked.parquet" if not threshold_input_bool else f"_threshold_{threshold_input}_ehr_masked.parquet"))
 # Initialize the model config. This config file contains the various parameters of the model.
-model_config = './run/i2b2/predict_i2b2.json'
 skip_steps = False
 
 
 # ## STEP 1.5: Create 'input_file' file if does not exit
 # Created file should contain each text in the appropriate json format i.e {"text": "text_should_be_here", "meta" : {"note_id": "note_id_if_present", "patient_id": "patient_id if present"}, "spans": []}
 df = pd.read_csv(input_file_csv)
+if debug_mode:
+    print("debug mode enabled")
+    df = df.iloc[0:5]
 if not skip_steps:
     f = open(input_file, "w")
     # Generate the JSON strings for each row and store them in a list
@@ -141,8 +154,10 @@ parser = HfArgumentParser((
 print('done...')
 # If we pass only one argument to the script and it's the path to a json file,
 # let's parse it to get our arguments.
-model_args, data_args, evaluation_args, training_args = parser.parse_json_file(json_file=model_config)
-
+model_args, data_args, evaluation_args, training_args = parser.parse_json_file(json_file=model_config_json_path)
+if 'threshold_max' in model_config_json_path:
+    model_args.threshold = threshold_input
+    print("Custom threshold given : ", model_args.threshold)
 
 # In[ ]:
 
